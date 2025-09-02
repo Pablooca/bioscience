@@ -2,7 +2,13 @@ from .EnsembleStats import (
     ensembleStats
 )
 
+from .EnsembleCobinet import (
+    ensembleCorrelation
+)
+
 __all__ = [
     # EnsembleStats.py
-    "ensembleStats"
+    "ensembleStats",
+    # EnsembleCobinet.py
+    "ensembleCorrelation"
 ]

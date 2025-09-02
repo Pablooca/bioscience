@@ -1,5 +1,6 @@
 from .BiBit import *
 from .Bcca import *
+from .CobinetBC import *
 from bioscience.base import *
 
 # BiBit algorithm
@@ -87,4 +88,24 @@ def bcca(dataset, correlationThreshold = 0.7, minCols = 3, deviceCount = 1, mode
                 listModels.add(oModel)
                 iLevel += 1
     
+    return listModels
+
+# CoBiNet algorithm
+def cobinet_biclustering(dataset, deviceCount=1, mode=1, debug=False):
+    listModels = set()
+
+    if dataset is not None:
+        if isinstance(dataset, Dataset):
+            oModel = processCobinet(dataset, deviceCount, mode, debug)
+            listModels.add(oModel)
+
+        if isinstance(dataset, set):
+            iLevel = 1
+            for oDataset in dataset:
+                if debug:
+                    print("\nLEVEL:", str(iLevel))
+                oModel = processCobinet(oDataset, deviceCount, mode, debug)
+                listModels.add(oModel)
+                iLevel += 1
+
     return listModels
