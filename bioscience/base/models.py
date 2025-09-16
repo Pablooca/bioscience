@@ -406,10 +406,6 @@ class NCBIDataset:
         strReturn += f"Link: {self.link}"        
         strReturn += f"Num. Samples: {self.nSamples}"        
         return strReturn
-    
-    
-
-    
 
 class NCBIClient:    
 
@@ -879,7 +875,6 @@ class CorrelationModel:
     def geneInteractionsIndex(self, geneInteractionsIndex):
         self._geneInteractionsIndex = geneInteractionsIndex
     
-    
 
 class Network:
     """
@@ -898,27 +893,40 @@ class Network:
     :type directed: boolean, optional
 
     """
-    def __init__(self, node, edge, validations=None, directed=None):
+    def __init__(self, nodeOrigin, nodeDestiny, edge, validations=None, directed=None):
         """
         Constructor method
         """
-        self._nodes = node
+        self._nodesOrigin = nodeOrigin
+        self._nodesDestiny = nodeDestiny
         self._edges = edge
-        self._sizeNodes = len(self._nodes)
+        self._sizeNodesOrigin = len(self._nodesOrigin)
+        self._sizeNodesDestiny = len(self._nodesDestiny)
         self._sizeEdges = len(self._edges)
         self._validations = validations
         self._directed = directed
     
     @property
-    def nodes(self):
+    def nodesOrigin(self):
         """
-        Getter and setter methods of the nodes property
+        Getter and setter methods of the nodesOrigin property
         """
-        return self._nodes
+        return self._nodesOrigin
 
-    @nodes.setter
-    def nodes(self, nodes):
-        self._nodes = nodes
+    @nodesOrigin.setter
+    def nodesOrigin(self, nodesOrigin):
+        self._nodesOrigin = nodesOrigin
+    
+    @property
+    def nodesDestiny(self):
+        """
+        Getter and setter methods of the nodesDestiny property
+        """
+        return self._nodesDestiny
+
+    @nodesDestiny.setter
+    def nodesDestiny(self, nodesDestiny):
+        self._nodesDestiny = nodesDestiny
 
     @property
     def edges(self):
@@ -928,12 +936,16 @@ class Network:
         return self._edges
 
     @edges.setter
-    def nodes(self, edges):
+    def edges(self, edges):
         self._edges = edges
 
     @property
-    def sizeNodes(self):
-        return self._sizeNodes
+    def sizeNodesOrigin(self):
+        return self._sizeNodesOrigin
+
+    @property
+    def sizeNodesDestiny(self):
+        return self._sizeNodesDestiny
 
     @property
     def sizeEdges(self):
@@ -972,6 +984,38 @@ class Network:
             if edge.nodeA == gene or edge.nodeB == gene:
                 count += 1
         return count
+
+    def __str__(self):
+        """
+        String representation of the Network object.
+        Provides a concise summary of nodes, edges, and graph properties.
+        """
+        summary = []
+        summary.append("Network Summary:")
+        summary.append(f"  Directed: {self.directed}")
+        summary.append(f"  Nodes (Origin): {self.sizeNodesOrigin}")
+        summary.append(f"  Nodes (Destiny): {self.sizeNodesDestiny}")
+        summary.append(f"  Edges: {self.sizeEdges}")
+        
+        # Ejemplo de nodos origen/destino
+        if self._sizeNodesOrigin > 0:
+            sample_origin = ", ".join(map(str, self.nodesOrigin[:5]))
+            summary.append(f"  Origin Nodes: {sample_origin} {'...' if self._sizeNodesOrigin > 5 else ''}")
+        if self._sizeNodesDestiny > 0:
+            sample_destiny = ", ".join(map(str, self.nodesDestiny[:5]))
+            summary.append(f"  Destiny Nodes: {sample_destiny} {'...' if self._sizeNodesDestiny > 5 else ''}")
+        
+        # Ejemplo de aristas
+        if self._sizeEdges > 0:
+            try:
+                sample_edges = ", ".join(str(e) for e in self.edges[:3])
+            except Exception:
+                sample_edges = ", ".join(f"({e.nodeA}, {e.nodeB})" for e in self.edges[:3])
+            summary.append(f"  Edges: {sample_edges} {'...' if self._sizeEdges > 3 else ''}")
+        
+        return "\n".join(summary)
+
+    
 
 class NetworkModel:
 
@@ -1024,8 +1068,17 @@ class NetworkModel:
         self._results = sorted(self._results, key=lambda net: (len(net.sizeNodes), len(net.sizeEdges)))
 
     def __str__(self):
-        return '\n'.join(str(net) for net in self.results)
-     
+        n = len(self.results) if self.results is not None else 0
+        if n == 0:
+            return f"NetworkModel(empty, executionTime={self.executionTime}s)"
+
+        NetworkModel_list = list(self.results)
+
+        lines = [f"NetworkModel with {n} networks (executionTime={self.executionTime}s):"]
+        for i, net in enumerate(NetworkModel_list, 1):
+            lines.append(f"[{i}] {str(net)}")
+        return "\n".join(lines)
+
 class Node:
 
     """
@@ -1042,13 +1095,12 @@ class Node:
 
     """
     
-    def __init__(self, info, id = None, name = None):
+    def __init__(self, id = None, name = None):
         """
         Constructor Method
         """
         self._id = id
         self._name = name
-        self._info = info
     
     @property
     def id(self):
@@ -1071,22 +1123,11 @@ class Node:
     @name.setter
     def name(self, name):
         self._name = name
-    
-    @property
-    def info(self):
-        """
-        Getter and setter methods of the extraCharacteristics property.
-        """
-        return self._info
-    
-    @info.setter
-    def extraCharacteristics(self, info):
-        self._info = info
+        
+    def __str__(self):
+        return f"Node(id={self.id}, name={self.name})"
 
 class Edge:
-
-    #     :type results: set(:class:`bioscience.base.models.Network`), optional
-
     """
     This is a conceptual class represented a edge of a genetic network.
 
@@ -1106,7 +1147,6 @@ class Edge:
     :type info: np.array
 
     """
-
     def __init__(self, nodeA, nodeB, weight, weightRelatedValues, info):
         """
         Constructor method
@@ -1171,3 +1211,11 @@ class Edge:
     @info.setter
     def info(self, info):
         self._info = info
+    
+    def __str__(self):
+        return (
+            f"Edge({self._nodeA} → {self._nodeB}, "
+            f"weight={self._weight}, "
+            f"relatedValues={self._weightRelatedValues}, "
+            f"info={self._info})"
+        )
