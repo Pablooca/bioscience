@@ -5,6 +5,8 @@ import os
 import time
 import ftplib
 from urllib.parse import urlparse
+# ! Está metida para la extensión de los archivos
+from pathlib import Path
 
 from .models import *
 
@@ -51,60 +53,78 @@ def load(db, apiKey = None, separator = "\t", skipr = 0, naFilter = False, index
             else:
                 return None
 
-def loadNetwork(db, index_nodeA, index_nodeB, index_weight, separator="\t", skipr = 0, head = None):
+def loadNetwork(path, separator=-1, skipr=-1, index_nodeA=-1, index_nodeB=-1, index_weight=-1, columnsRelatedWeight=None, head=None):
+    print("Loading dataset...")
+    results = []
+    if Path(path).suffix in [".csv", ".txt"]:
+        network_model = __loadNetworkProcessing(path, separator, skipr, index_nodeA, index_nodeB, index_weight, columnsRelatedWeight, head)
+        results.append(network_model)
+        print(results)
+    else:
+        files = [f for f in os.listdir(path) if Path(f).suffix in [".csv", ".txt"]]
+        for file in files:
+            file_path = os.path.join(path, file)
+            network_model = __loadNetworkProcessing(file_path, separator, skipr, index_nodeA, index_nodeB, index_weight, columnsRelatedWeight, head)
+            results.append(network_model)
+    network_model = NetworkModel(results)
+    print(network_model)
+    return network_model
+
+def __loadNetworkProcessing(path, separator="\t", skipr=0, index_nodeA=-1, index_nodeB=-1, index_weight=-1, columnsRelatedWeight=None, head=None):
     """
     Load a network dataset from a file.
-    
-    :param db: The path where the file is stored
-    :type db: str
-    
-    :param index_nodeA: Column position where the node A gene names are stored in the dataset, defaults to -1 (deactivated).
-    :type index_nodeA: int
-    
-    :param index_nodeB: Column position where the node B gene names are stored in the dataset, defaults to -1 (deactivated).
-    :type index_nodeB: int
-    
-    :index_weight: Column position where the edge weight is stored in the dataset, defaults to -1 (deactivated).
-    :type index_weight: int
-        
-    :param separator: An attribute indicating how the columns of the file are separated.
-    :type separator: str,optional
-    
-    :param skipr: Number of rows the user wishes to omit from the file, defaults to 0.
-    :type skipr: int, optional
-    
-    :param head: Row number(s) containing column labels and marking the start of the data (zero-indexed), defaults to None.
-    :type head: int, optional
-        
-    :return: A network dataset object from the reading of a file
-    :rtype: :class:`bioscience.base.models.NetworkDataset`
     """
-    
-    dfPandas = pd.read_csv(db, sep=separator, skiprows = skipr, header = head)
 
+    dfPandas = pd.read_csv(path, sep=separator, skiprows=skipr, header=head)
     dataColumns = np.asarray(dfPandas.columns)
     dataset = np.asarray(dfPandas)
-    
-    if index_nodeA >= 0:
-        index_lengths = index_nodeA - 1
-        geneNamesnodeA = dataset[:, index_lengths]
-        dataset = np.delete(dataset, index_lengths, 1)
-    
-    if index_nodeB >= 0:
-        index_lengths = index_nodeB - 2
-        geneNamesnodeB = dataset[:, index_lengths]
-        dataset = np.delete(dataset, index_lengths, 1)
 
-    if index_weight >= 0:
-        index_lengths_weight = index_weight - 3
-        edgeWeight = dataset[:, index_lengths_weight]
-        dataset = np.delete(dataset, index_lengths_weight, 1)
+    n_cols = dataset.shape[1]
+
+    def safe_index(idx):
+        return idx - 1 if 0 < idx <= n_cols else None
+
+    idxA = safe_index(index_nodeA)
+    idxB = safe_index(index_nodeB)
+    idxW = safe_index(index_weight)
+
+    origin_nodes = []
+    geneNamesnodeA = dataset[:, idxA] if idxA is not None else []
+    for node_Name in geneNamesnodeA:
+        origin_nodes.append(Node(name=node_Name))
+
+    destiny_nodes = []
+    geneNamesnodeB = dataset[:, idxB] if idxB is not None else []
+    for node_Name in geneNamesnodeB:
+        destiny_nodes.append(Node(name=node_Name))
+
+    edgeWeight = dataset[:, idxW] if idxW is not None else np.zeros(len(origin_nodes))
+
+    weightRelatedValues = []
+    valid_related_cols = []
+    if columnsRelatedWeight:
+        for col in columnsRelatedWeight:
+            idx = safe_index(col)
+            if idx is not None:
+                weightRelatedValues.append(dataset[:, idx])
+                valid_related_cols.append(idx)
+
+    cols_to_remove = list(filter(lambda x: x is not None, [idxA, idxB, idxW] + valid_related_cols))
+    cols_to_remove = sorted(set(cols_to_remove))
+    columns = np.delete(dataset, cols_to_remove, axis=1) if cols_to_remove else dataset
+
+    edge_list = []
+    for node_origin, node_destiny, weight in zip(origin_nodes, destiny_nodes, edgeWeight):
+        edge = Edge(nodeA=node_origin, nodeB=node_destiny, weight=weight, 
+                    weightRelatedValues=weightRelatedValues if weightRelatedValues else None,
+                    info=columns)
+        edge_list.append(edge)
 
     importantInfo = [geneNamesnodeA, geneNamesnodeB, edgeWeight]
-    importantColumnsName = [dataColumns[index_nodeA - 1], dataColumns[index_nodeB - 1], dataColumns[index_weight - 1]]
-    
-    dataColumns = np.delete(dataColumns, [index_nodeA - 1, index_nodeB - 1, index_weight - 1])
-    return NetworkDataset(importantInfo, geneNamesNodeA=geneNamesnodeA, geneNamesNodeB=geneNamesnodeB, columnsNames=dataColumns, extraInfo=dataset, importantColumnsName=importantColumnsName)
+    importantColumnsName = [dataColumns[idxA], dataColumns[idxB], dataColumns[idxW]] if all(x is not None for x in [idxA, idxB, idxW]) else []
+
+    network = Network(origin_nodes, destiny_nodes, edge_list)
+    return network
 
 def __loadSpecificFile(db, separator, skipr, naFilter, index_gene, index_lengths, head) -> pd.DataFrame:
     if naFilter is True:
